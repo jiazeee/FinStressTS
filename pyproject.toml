@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finstressts-paper-code"
+version = "0.1.0"
+description = "Paper-code release for FinStressTS probabilistic financial stress time-series forecasting experiments."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "FinStressTS contributors" }
+]
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+parquet = [
+  "pyarrow",
+]
+torch = [
+  "torch",
+]
+deep = [
+  "torch",
+]
+
+[project.scripts]
+finprobts = "finprobts.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["finprobts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

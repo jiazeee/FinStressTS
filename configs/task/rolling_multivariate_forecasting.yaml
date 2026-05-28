@@ -1,0 +1,9 @@
+﻿task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+

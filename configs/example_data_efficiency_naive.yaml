@@ -1,0 +1,45 @@
+﻿run:
+  run_id: example_data_efficiency_naive
+  output_dir: outputs
+  seed: 42
+
+dataset:
+  name: custom_csv
+  path: data/example/example_returns_wide.csv
+  format: wide
+  date_column: date
+  target_columns: null
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+
+task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+data_efficiency:
+  train_fractions: [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+  right_aligned_train: true
+  continue_on_error: true
+  save_forecasts: false
+  plot: false
+  models:
+    - name: naive
+      params: {}
+
+forecast:
+  num_samples: 100
+
+evaluation:
+  quantiles: [0.1, 0.5, 0.9]
+  coverage_levels: [0.5, 0.9]
+  var_alpha: 0.05
+

@@ -1,0 +1,79 @@
+﻿run:
+  run_id: example_crypto_tsflow
+  output_dir: outputs
+  seed: 42
+
+dataset:
+  name: custom_csv
+  path: data/example/example_returns_wide.csv
+  format: wide
+  date_column: date
+  target_columns: null
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+
+task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+model:
+  name: tsflow
+  params:
+    input_size: null
+    freq: B
+    prediction_length: null
+    target_dim: null
+    context_length: null
+    setting: multivariate
+    normalization: longmean
+    use_lags: true
+    lags_seq: null
+    use_ema: true
+    ema_beta: 0.9999
+    ema_update_after_step: 128
+    ema_update_every: 1
+    num_steps: 32
+    solver: euler
+    matching: random
+    sigm: 1.0e-3
+    guidance_scale: 0.0
+    prior_kernel: ou
+    prior_gamma: 1.0
+    prior_context_freqs: 14
+    prior_iso: null
+    hidden_dim: 64
+    step_emb: 64
+    num_residual_blocks: 3
+    residual_block: s4
+    dropout: 0.0
+    init_skip: false
+    feature_skip: true
+    bidirectional: true
+    nheads: 8
+    asset_embedding_dim: 16
+    batch_size: 32
+    max_epochs: 10
+    learning_rate: 1.0e-3
+    weight_decay: 0.0
+    gradient_clip_val: 0.5
+    patience: 3
+    scaling: false
+    device: auto
+
+forecast:
+  num_samples: 100
+
+evaluation:
+  quantiles: [0.1, 0.5, 0.9]
+  coverage_levels: [0.5, 0.9]
+  var_alpha: 0.05
+

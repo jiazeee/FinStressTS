@@ -1,0 +1,36 @@
+# Python/cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Environments/editors
+.venv/
+venv/
+.env
+.idea/
+.vscode/
+
+# Generated experiment artifacts
+outputs/
+configs/generated/
+checkpoints/
+runs/
+wandb/
+generated_datasets/
+data/simulated/
+*.npz
+*.npy
+*.pt
+*.pth
+*.ckpt
+
+# Local/private data, except the tiny public example
+/data/*
+!/data/example/
+!/data/example/**

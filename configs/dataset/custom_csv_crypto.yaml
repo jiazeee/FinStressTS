@@ -1,0 +1,12 @@
+dataset:
+  name: custom_csv
+  path: data/example/example_returns_wide.csv
+  format: wide
+  date_column: date
+  target_columns: null
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true

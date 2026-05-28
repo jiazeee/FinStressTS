@@ -1,0 +1,8 @@
+﻿model:
+  name: naive
+  params:
+    min_std: 1.0e-8
+
+forecast:
+  num_samples: 100
+

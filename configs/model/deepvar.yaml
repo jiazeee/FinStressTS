@@ -1,0 +1,26 @@
+﻿model:
+  name: deepvar
+  params:
+    hidden_size: 40
+    num_layers: 2
+    rnn_type: LSTM
+    dropout: 0.1
+    rank: 5
+    embedding_dim: 5
+    freq: B
+    num_parallel_samples: 100
+    cardinality: [1]
+    conditioning_length: 200
+    use_marginal_transformation: false
+    pick_incomplete: false
+    use_time_features: true
+    use_scale_feature: true
+    batch_size: 32
+    max_epochs: 100
+    learning_rate: 1.0e-3
+    weight_decay: 1.0e-8
+    gradient_clip_val: 10.0
+    patience: 10
+    scaling: true
+    device: auto
+

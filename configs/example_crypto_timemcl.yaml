@@ -1,0 +1,79 @@
+﻿run:
+  run_id: example_crypto_timemcl
+  output_dir: outputs
+  seed: 42
+
+dataset:
+  name: custom_csv
+  path: data/example/example_returns_wide.csv
+  format: wide
+  date_column: date
+  target_columns: null
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+
+task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+model:
+  name: timemcl
+  params:
+    input_size: null
+    freq: B
+    prediction_length: null
+    target_dim: null
+    context_length: null
+    num_layers: 2
+    num_cells: 40
+    cell_type: LSTM
+    num_parallel_samples: 100
+    dropout_rate: 0.1
+    embedding_dimension: 0
+    conditioning_length: 100
+    num_hypotheses: 4
+    mcl_hidden_dim: 300
+    mcl_loss_type: min_ext_sum
+    score_loss_weight: 0.5
+    wta_mode: wta
+    wta_mode_params:
+      epsilon: null
+      temperature_ini: 10
+      temperature: 10
+      scheduler_mode: exponential
+      temperature_decay: 0.95
+      temperature_lim: 5.0e-4
+      wta_after_temperature_lim: true
+    single_linear_layer: true
+    backbone_deleted: true
+    scaling: true
+    scaler_type: mean
+    pick_incomplete: false
+    lags_seq: null
+    sample_hyps: true
+    sample_noise_std: 0.0
+    batch_size: 32
+    max_epochs: 10
+    lr: 1.0e-3
+    weight_decay: 1.0e-8
+    gradient_clip_val: 10.0
+    patience: 3
+    device: auto
+
+forecast:
+  num_samples: 100
+
+evaluation:
+  quantiles: [0.1, 0.5, 0.9]
+  coverage_levels: [0.5, 0.9]
+  var_alpha: 0.05
+

@@ -1,0 +1,71 @@
+﻿run:
+  run_id: example_crypto_ratd
+  output_dir: outputs
+  seed: 42
+
+dataset:
+  name: custom_csv
+  path: data/example/example_returns_wide.csv
+  format: wide
+  date_column: date
+  target_columns: null
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+
+task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+model:
+  name: ratd
+  params:
+    input_size: null
+    freq: B
+    prediction_length: null
+    target_dim: null
+    context_length: null
+    layers: 4
+    channels: 64
+    nheads: 8
+    diffusion_embedding_dim: 128
+    diffusion_steps: 50
+    beta_start: 1.0e-4
+    beta_end: 0.5
+    schedule: quad
+    time_embedding_dim: 128
+    feature_embedding_dim: 16
+    is_unconditional: false
+    target_strategy: test
+    num_sample_features: 64
+    use_reference: true
+    retrieval_k: 3
+    retrieval_metric: cosine
+    retrieval_exclude_self: true
+    batch_size: 1
+    max_epochs: 10
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-6
+    gradient_clip_val: 1.0
+    patience: 3
+    validation_all_timesteps: false
+    scaling: true
+    dropout: 0.0
+    device: auto
+
+forecast:
+  num_samples: 100
+
+evaluation:
+  quantiles: [0.1, 0.5, 0.9]
+  coverage_levels: [0.5, 0.9]
+  var_alpha: 0.05
+

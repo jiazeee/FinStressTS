@@ -1,0 +1,46 @@
+run:
+  run_id: synthetic_case1_l1_deepvar
+  output_dir: outputs
+  seed: 42
+
+dataset:
+  name: synthetic_garch
+  T: 600
+  n_firms: 4
+  n_factors: 2
+  seed: 124
+
+preprocessing:
+  value_kind: returns
+  price_to_log_return: false
+  missing_method: ffill
+  standardize: true
+
+split:
+  train_size: 0.6
+  val_size: 0.2
+
+task:
+  context_length: 96
+  prediction_length: 1
+  stride: 1
+
+model:
+  name: deepvar
+  params:
+    hidden_size: 24
+    num_layers: 1
+    rank: 2
+    embedding_dim: 4
+    freq: B
+    use_time_features: true
+    use_scale_feature: true
+    batch_size: 32
+    max_epochs: 1
+    learning_rate: 1.0e-3
+    gradient_clip_val: 10.0
+    scaling: false
+    device: cpu
+
+forecast:
+  num_samples: 20

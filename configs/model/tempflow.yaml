@@ -1,0 +1,32 @@
+﻿model:
+  name: tempflow
+  params:
+    input_size: null
+    freq: B
+    prediction_length: null
+    target_dim: null
+    context_length: null
+    num_layers: 2
+    num_cells: 40
+    cell_type: LSTM
+    num_parallel_samples: 100
+    dropout_rate: 0.1
+    cardinality: [1]
+    embedding_dimension: 5
+    flow_type: RealNVP
+    n_blocks: 3
+    hidden_size: 100
+    n_hidden: 2
+    conditioning_length: 200
+    dequantize: false
+    scaling: true
+    pick_incomplete: false
+    lags_seq: null
+    batch_size: 32
+    max_epochs: 100
+    lr: 1.0e-3
+    weight_decay: 0.0
+    gradient_clip_val: 10.0
+    patience: 10
+    device: auto
+
