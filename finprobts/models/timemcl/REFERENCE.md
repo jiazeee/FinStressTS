@@ -10,7 +10,6 @@ Paper:
 
 Upstream repo:
 - https://github.com/Victorletzelter/timeMCL
-- Local reference copy inspected at `C:\Users\Sun Jiaze\PycharmProjects\Prob_models\TimeMCL_new`.
 
 License:
 - Apache License 2.0 in the upstream repository.

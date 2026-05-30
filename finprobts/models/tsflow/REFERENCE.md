@@ -10,10 +10,9 @@ Paper:
 
 Upstream repo:
 - https://github.com/marcelkollovieh/TSFlow
-- Local reference copy inspected at `C:\Users\Sun Jiaze\PycharmProjects\Prob_models\TSFlow`.
 
 License:
-- No license file was found in the inspected local/public TSFlow repository. For that reason this FinProbTS version does not vendor TSFlow source files; it implements the paper/repo architecture natively with PyTorch primitives.
+- No license file was found in the inspected public TSFlow repository. For that reason this FinProbTS version does not vendor TSFlow source files; it implements the paper/repo architecture natively with PyTorch primitives.
 
 Deviations from upstream:
 - Keeps the FinProbTS benchmark contract: input is `RollingWindowDataset`; output is `ForecastResult` with samples shaped `[num_windows, num_samples, prediction_length, num_assets]`.

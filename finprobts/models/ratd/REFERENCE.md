@@ -10,7 +10,6 @@ Paper:
 
 Upstream repo:
 - https://github.com/stanliu96/RATD
-- Local reference copy inspected at `C:\Users\Sun Jiaze\PycharmProjects\RATD`.
 
 License:
 - MIT License in the upstream repository. The public RATD code states it is based on CSDI.
