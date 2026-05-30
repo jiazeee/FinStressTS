@@ -4,7 +4,8 @@ Reference:
 - Native FinProbTS implementation of the PyTorchTS TimeGrad estimator design.
 
 Paper:
-- Kashif Rasul, Calvin Seward, Ingmar Schuster, Roland Vollgraf, "Autoregressive Denoising Diffusion Models for Multivariate Probabilistic Time Series Forecasting", ICML 2021.
+- Kashif Rasul, Calvin Seward, Ingmar Schuster, and Roland Vollgraf, "Autoregressive Denoising Diffusion Models for Multivariate Probabilistic Time Series Forecasting", Proceedings of the 38th International Conference on Machine Learning, PMLR 139:8857-8868, 2021 / arXiv:2101.12072.
+- PMLR: https://proceedings.mlr.press/v139/rasul21a.html
 
 Upstream repo:
 - https://github.com/zalandoresearch/pytorch-ts

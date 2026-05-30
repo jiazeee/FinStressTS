@@ -4,7 +4,7 @@ Reference:
 - Native FinProbTS implementation of the conditional TSFlow forecasting design.
 
 Paper:
-- Marcel Kollovieh, Marten Lienen, David Luedke, Leo Schwinn, Stephan Guennemann. "Flow Matching with Gaussian Process Priors for Probabilistic Time Series Forecasting." ICLR 2025.
+- Marcel Kollovieh, Marten Lienen, David Lüdke, Leo Schwinn, and Stephan Günnemann, "Flow Matching with Gaussian Process Priors for Probabilistic Time Series Forecasting", ICLR 2025 / arXiv:2410.03024.
 - arXiv: https://arxiv.org/abs/2410.03024
 - ICLR: https://proceedings.iclr.cc/paper_files/paper/2025/hash/ee1a1ecc92f35702b5c29dad3dc909ea-Abstract-Conference.html
 
@@ -12,7 +12,7 @@ Upstream repo:
 - https://github.com/marcelkollovieh/TSFlow
 
 License:
-- No license file was found in the inspected public TSFlow repository. For that reason this FinProbTS version does not vendor TSFlow source files; it implements the paper/repo architecture natively with PyTorch primitives.
+- No license file was found in the inspected public TSFlow repository as of 2026-05-30. For that reason this FinProbTS version does not vendor TSFlow source files; it implements the paper/repo architecture natively with PyTorch primitives.
 
 Deviations from upstream:
 - Keeps the FinProbTS benchmark contract: input is `RollingWindowDataset`; output is `ForecastResult` with samples shaped `[num_windows, num_samples, prediction_length, num_assets]`.

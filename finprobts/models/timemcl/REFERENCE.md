@@ -4,7 +4,7 @@ Reference:
 - Native FinProbTS implementation of the TimeMCL multiple-choice forecasting design.
 
 Paper:
-- Adrien Cortes, Remi Rehm, Victor Letzelter. "Winner-Takes-All for Multivariate Probabilistic Time Series Forecasting." Proceedings of the 42nd International Conference on Machine Learning, PMLR 267:11288-11312, 2025.
+- Adrien Cortes, Remi Rehm, and Victor Letzelter, "Winner-takes-all for Multivariate Probabilistic Time Series Forecasting", Proceedings of the 42nd International Conference on Machine Learning, PMLR 267:11288-11312, 2025.
 - arXiv: https://arxiv.org/abs/2506.05515
 - PMLR: https://proceedings.mlr.press/v267/cortes25b.html
 

@@ -4,7 +4,7 @@ Reference:
 - Native FinProbTS implementation of Retrieval-Augmented Time series Diffusion.
 
 Paper:
-- Jingwei Liu, Ling Yang, Hongyan Li, Shenda Hong. "Retrieval-Augmented Diffusion Models for Time Series Forecasting." NeurIPS 2024.
+- Jingwei Liu, Ling Yang, Hongyan Li, and Shenda Hong, "Retrieval-Augmented Diffusion Models for Time Series Forecasting", Advances in Neural Information Processing Systems 37, 2024.
 - arXiv: https://arxiv.org/abs/2410.18712
 - NeurIPS: https://papers.nips.cc/paper_files/paper/2024/hash/053ee34c0971568bfa5c773015c10502-Abstract-Conference.html
 

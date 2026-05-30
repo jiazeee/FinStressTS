@@ -224,7 +224,9 @@ outputs/synthetic_suite/synthetic_suite_summary.json
 
 ## Model Implementation Notes
 
-The repository prioritizes one reproducible benchmark interface over vendoring multiple external training stacks. Implementations follow the same high-level architectures and training objectives where practical, but may use native PyTorch modules, local data adapters, or dependency-light substitutes. Examples include native DeepAR/DeepVAR-style recurrent probabilistic forecasters, TimeGrad/TempFlow-style generative models, RATD-style retrieval-augmented diffusion, TimeMCL-style WTA hypotheses, and TSFlow with a native S4-style state-space backend.
+The paper experiments on the 30 synthetic datasets were run with the original authors' implementations where publicly available, connected to the FinStressTS data and evaluation protocol through thin adapters. Those upstream codebases differ in licenses, dependency stacks, supported Python versions, and experiment runners, so this release does not vendor all of them directly.
+
+This repository instead prioritizes one reproducible benchmark interface. The bundled deep models are native or adapted FinStressTS implementations aligned with the cited papers and public architecture references. They preserve the shared data, training, prediction, and evaluation contract, but may use native PyTorch modules, local data adapters, or dependency-light substitutes. Examples include native DeepAR/DeepVAR-style recurrent probabilistic forecasters, TimeGrad/TempFlow-style generative models, RATD-style retrieval-augmented diffusion, TimeMCL-style WTA hypotheses, and TSFlow with a native S4-style state-space backend.
 
 The exact references and deviations are documented in:
 
@@ -249,5 +251,4 @@ For the torch model smoke tests:
 ```powershell
 pytest tests/test_torch_models.py -q
 ```
-
 

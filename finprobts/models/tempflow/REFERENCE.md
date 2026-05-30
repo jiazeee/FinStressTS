@@ -4,7 +4,8 @@ Reference:
 - Native FinProbTS implementation of the PyTorchTS TempFlow estimator design.
 
 Paper:
-- Kashif Rasul, Abdul-Saboor Sheikh, Ingmar Schuster, Urs Bergmann, Roland Vollgraf, "Multivariate Probabilistic Time Series Forecasting via Conditioned Normalizing Flows", ICLR 2021.
+- Kashif Rasul, Abdul-Saboor Sheikh, Ingmar Schuster, Urs M. Bergmann, and Roland Vollgraf, "Multivariate Probabilistic Time Series Forecasting via Conditioned Normalizing Flows", ICLR 2021 Spotlight / arXiv:2002.06103.
+- OpenReview: https://openreview.net/forum?id=WiGQBFuVRv
 
 Upstream repo:
 - https://github.com/zalandoresearch/pytorch-ts
