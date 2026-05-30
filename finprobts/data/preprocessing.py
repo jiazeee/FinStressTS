@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -50,12 +50,40 @@ def price_to_log_return(data: ArrayLike) -> ArrayLike:
     return _log_return_values(np.asarray(data, dtype=float))
 
 
-def handle_missing_values(dataset: FinancialDataset, method: str = "ffill") -> FinancialDataset:
+def _dataframe_from_feature(array: np.ndarray, index: np.ndarray) -> tuple[pd.DataFrame, tuple[int, ...]]:
+    arr = np.asarray(array)
+    trailing_shape = arr.shape[1:]
+    return pd.DataFrame(arr.reshape(arr.shape[0], -1), index=index), trailing_shape
+
+
+def _ffill_with_initial(df: pd.DataFrame, initial_values: Optional[np.ndarray] = None) -> pd.DataFrame:
+    if initial_values is None:
+        return df.ffill()
+
+    initial = np.asarray(initial_values, dtype=float).reshape(1, -1)
+    if initial.shape[1] != df.shape[1]:
+        raise ValueError("initial_values must have the same number of columns as the dataset.")
+    seed = pd.DataFrame(initial, columns=df.columns)
+    combined = pd.concat([seed, df.reset_index(drop=True)], axis=0, ignore_index=True)
+    filled = combined.ffill().iloc[1:].copy()
+    filled.index = df.index
+    return filled
+
+
+def handle_missing_values(
+    dataset: FinancialDataset,
+    method: str = "ffill",
+    initial_values: Optional[np.ndarray] = None,
+    initial_features: Optional[Dict[str, np.ndarray]] = None,
+    allow_leading_backfill: bool = False,
+) -> FinancialDataset:
     """Handle missing values in the dataset target array.
 
     Supported methods are ``ffill``, ``bfill``, ``drop``, ``zero``, and
-    ``none``. ``ffill`` also backfills leading gaps so the output contains no
-    missing values when each column has at least one observation.
+    ``none``. ``ffill`` is causal by default: it only uses past observations
+    and optional ``initial_values`` from a previous chronological split. Set
+    ``allow_leading_backfill=True`` only when future-looking imputation is an
+    explicit experimental choice.
     """
 
     method = method.lower()
@@ -65,11 +93,13 @@ def handle_missing_values(dataset: FinancialDataset, method: str = "ffill") -> F
         values = df.to_numpy(dtype=float)
         dates = dataset.dates.copy()
     elif method == "ffill":
-        filled = df.ffill().bfill()
+        filled = _ffill_with_initial(df, initial_values=initial_values)
+        if allow_leading_backfill:
+            filled = filled.bfill()
         values = filled.to_numpy(dtype=float)
         dates = dataset.dates.copy()
     elif method == "bfill":
-        filled = df.bfill().ffill()
+        filled = df.bfill()
         values = filled.to_numpy(dtype=float)
         dates = dataset.dates.copy()
     elif method == "zero":
@@ -82,21 +112,33 @@ def handle_missing_values(dataset: FinancialDataset, method: str = "ffill") -> F
     else:
         raise ValueError("method must be one of: ffill, bfill, drop, zero, none.")
 
-    if np.isnan(values).any():
-        raise ValueError("Missing values remain after preprocessing.")
+    if method != "none" and np.isnan(values).any():
+        raise ValueError(
+            "Missing values remain after preprocessing. For causal ffill this usually means "
+            "a series starts with missing values; use drop/zero, provide prior split values, "
+            "or explicitly set allow_leading_backfill=True."
+        )
 
     features = {}
     for name, array in dataset.features.items():
-        feature_df = pd.DataFrame(array, index=dataset.dates)
+        feature_df, trailing_shape = _dataframe_from_feature(array, dataset.dates)
+        initial_feature = None if initial_features is None else initial_features.get(name)
+        if initial_feature is not None:
+            initial_feature = np.asarray(initial_feature).reshape(1, -1)
         if method == "drop":
             feature_df = feature_df.reindex(dates)
         elif method == "ffill":
-            feature_df = feature_df.ffill().bfill()
+            feature_df = _ffill_with_initial(feature_df, initial_values=initial_feature)
+            if allow_leading_backfill:
+                feature_df = feature_df.bfill()
         elif method == "bfill":
-            feature_df = feature_df.bfill().ffill()
+            feature_df = feature_df.bfill()
         elif method == "zero":
             feature_df = feature_df.fillna(0.0)
-        features[name] = feature_df.to_numpy()
+        feature_values = feature_df.to_numpy()
+        if method != "none" and np.isnan(feature_values).any():
+            raise ValueError(f"Missing values remain in feature '{name}' after preprocessing.")
+        features[name] = feature_values.reshape((feature_values.shape[0], *trailing_shape))
 
     metadata = dict(dataset.metadata)
     metadata["missing_value_method"] = method
@@ -107,6 +149,43 @@ def handle_missing_values(dataset: FinancialDataset, method: str = "ffill") -> F
         features=features,
         metadata=metadata,
     )
+
+
+def handle_missing_values_split_safe(
+    split: TimeSeriesSplit,
+    method: str = "ffill",
+    allow_leading_backfill: bool = False,
+) -> TimeSeriesSplit:
+    """Apply missing-value handling without leaking future splits backward."""
+
+    method = method.lower()
+    if method != "ffill":
+        return TimeSeriesSplit(
+            train=handle_missing_values(split.train, method=method, allow_leading_backfill=allow_leading_backfill),
+            val=handle_missing_values(split.val, method=method, allow_leading_backfill=allow_leading_backfill),
+            test=handle_missing_values(split.test, method=method, allow_leading_backfill=allow_leading_backfill),
+        )
+
+    train = handle_missing_values(
+        split.train,
+        method=method,
+        allow_leading_backfill=allow_leading_backfill,
+    )
+    val = handle_missing_values(
+        split.val,
+        method=method,
+        initial_values=train.values[-1],
+        initial_features={name: values[-1] for name, values in train.features.items()},
+        allow_leading_backfill=allow_leading_backfill,
+    )
+    test = handle_missing_values(
+        split.test,
+        method=method,
+        initial_values=val.values[-1],
+        initial_features={name: values[-1] for name, values in val.features.items()},
+        allow_leading_backfill=allow_leading_backfill,
+    )
+    return TimeSeriesSplit(train=train, val=val, test=test)
 
 
 def rolling_normalize(
@@ -147,8 +226,24 @@ class DatasetNormalizer:
 
     @classmethod
     def fit(cls, dataset: FinancialDataset, eps: float = 1e-8) -> "DatasetNormalizer":
-        mean = dataset.values.mean(axis=0)
-        std = dataset.values.std(axis=0)
+        values = np.asarray(dataset.values, dtype=float)
+        finite = np.isfinite(values)
+        if np.any(finite.sum(axis=0) == 0):
+            missing_assets = [
+                asset_id
+                for asset_id, count in zip(dataset.asset_ids, finite.sum(axis=0))
+                if int(count) == 0
+            ]
+            raise ValueError(
+                "Cannot fit DatasetNormalizer because some assets have no finite "
+                f"training values: {missing_assets}"
+            )
+
+        cleaned = np.where(finite, values, np.nan)
+        mean = np.nanmean(cleaned, axis=0)
+        std = np.nanstd(cleaned, axis=0)
+        if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)):
+            raise ValueError("DatasetNormalizer fitted non-finite statistics.")
         std = np.where(std < eps, 1.0, std)
         return cls(mean=mean, std=std)
 

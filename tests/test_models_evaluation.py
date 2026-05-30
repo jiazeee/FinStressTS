@@ -46,6 +46,30 @@ def test_naive_model_forecast_sample_shape():
     assert result.y_true.shape == (14, 2, 3)
 
 
+def test_naive_model_uses_observed_context_values_only():
+    dataset = FinancialDataset(
+        values=np.array(
+            [
+                [1.0, np.nan],
+                [3.0, np.nan],
+                [np.nan, np.nan],
+                [5.0, 4.0],
+                [7.0, 6.0],
+            ]
+        ),
+        dates=pd.date_range("2024-01-01", periods=5),
+        asset_ids=["a", "b"],
+    )
+    windows = generate_rolling_windows(dataset, context_length=3, prediction_length=1)
+
+    model = NaiveForecastModel(seed=1)
+    model.fit(windows)
+    result = model.predict(windows, num_samples=4)
+
+    assert np.isfinite(result.samples).all()
+    assert result.metadata["uses_observed_context_only"] is True
+
+
 def test_crps_sample_approximation_perfect_samples():
     y_true = np.array([[[1.0], [2.0]]])
     samples = np.repeat(y_true[:, np.newaxis, :, :], repeats=3, axis=1)

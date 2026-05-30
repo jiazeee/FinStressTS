@@ -120,7 +120,7 @@ def _make_simulator(case: str, cfg: Dict[str, Any], seed: int):
             T=cfg["T"], n_firms=cfg["n_firms"], n_factors=cfg["n_factors"],
             b1_u=b1, b5_u=b5, b22_u=b22, c_idio=cfg["c_idio"],
             b1_f=b1, b5_f=b5, b22_f=b22, c_factor=cfg["c_factor"],
-            seed=seed,
+            burn_in=cfg["burn_in"], eps=cfg["eps"], seed=seed,
         )
     if case == "case3_heavy_tail":
         from finprobts.simulators.heavy_tail import HeavyTailSimulator
@@ -236,12 +236,6 @@ def generate_synthetic_case(
     df = _normalize_tidy_columns(sim.to_dataframe())
     df["case"] = case
     df["difficulty_level"] = int(level)
-
-    if case == "case2_har":
-        post_burn_in = int(CASE_PRESETS[case].get("post_burn_in", 0))
-        if post_burn_in > 0 and df["time"].max() >= post_burn_in:
-            df = df[df["time"] >= post_burn_in].copy()
-            df["time"] = df["time"] - post_burn_in
 
     tag = _tag(case, cfg, seed)
     summary = _summary(df)

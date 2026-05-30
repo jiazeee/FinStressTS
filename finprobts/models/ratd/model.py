@@ -93,7 +93,7 @@ class ReferenceModulatedCrossAttention(nn.Module if nn is not None else object):
         sequence_dim: int,
         reference_dim: int,
         heads: int = 8,
-        dim_head: int = 8,
+        dim_head: int = 64,
         dropout: float = 0.0,
     ) -> None:
         require_torch()
@@ -146,7 +146,7 @@ class RATDResidualBlock(nn.Module if nn is not None else object):
         diffusion_embedding_dim: int,
         nheads: int,
         use_reference: bool,
-        dropout: float = 0.0,
+        dropout: float = 0.1,
     ) -> None:
         require_torch()
         super().__init__()
@@ -160,7 +160,7 @@ class RATDResidualBlock(nn.Module if nn is not None else object):
             nn.TransformerEncoderLayer(
                 d_model=self.channels,
                 nhead=int(nheads),
-                dim_feedforward=max(64, 4 * self.channels),
+                dim_feedforward=64,
                 dropout=float(dropout),
                 activation="gelu",
             ),
@@ -170,7 +170,7 @@ class RATDResidualBlock(nn.Module if nn is not None else object):
             nn.TransformerEncoderLayer(
                 d_model=self.channels,
                 nhead=int(nheads),
-                dim_feedforward=max(64, 4 * self.channels),
+                dim_feedforward=64,
                 dropout=float(dropout),
                 activation="gelu",
             ),
@@ -180,9 +180,9 @@ class RATDResidualBlock(nn.Module if nn is not None else object):
             ReferenceModulatedCrossAttention(
                 sequence_dim=int(sequence_length),
                 reference_dim=int(reference_length),
-                heads=int(nheads),
-                dim_head=8,
-                dropout=float(dropout),
+                heads=8,
+                dim_head=64,
+                dropout=0.0,
             )
             if self.use_reference
             else None
@@ -507,7 +507,7 @@ class RATDForecastModel(BaseProbForecastModel):
         seed: Optional[int] = None,
         scaling: bool = True,
         scaler_min_std: float = 1e-6,
-        dropout: float = 0.0,
+        dropout: float = 0.1,
         verbose: bool = False,
         hidden_size: Optional[int] = None,
         num_layers: Optional[int] = None,
@@ -690,7 +690,12 @@ class RATDForecastModel(BaseProbForecastModel):
         self._memory_contexts = torch.as_tensor(contexts, dtype=torch.float32, device=self._device)
         self._memory_targets = torch.as_tensor(targets, dtype=torch.float32, device=self._device)
 
-    def _reference_from_past(self, past_target: Any) -> Optional[Any]:
+    def _reference_from_past(
+        self,
+        past_target: Any,
+        window_index: Optional[Any] = None,
+        exclude_by_index: bool = False,
+    ) -> Optional[Any]:
         if not self.use_reference:
             return None
         if self._memory_contexts is None or self._memory_targets is None:
@@ -699,13 +704,19 @@ class RATDForecastModel(BaseProbForecastModel):
         if flat.shape[1] != self._memory_contexts.shape[1]:
             raise ValueError("past_target context shape does not match the fitted RATD retrieval memory.")
         k = min(self.retrieval_k, int(self._memory_targets.shape[0]))
-        candidate_k = min(int(self._memory_targets.shape[0]), k + (1 if self.retrieval_exclude_self else 0))
+        num_memory = int(self._memory_targets.shape[0])
+        candidate_k = min(num_memory, k + (1 if self.retrieval_exclude_self else 0))
+        use_index_exclusion = self.retrieval_exclude_self and exclude_by_index and window_index is not None
         with torch.no_grad():
             if self.retrieval_metric == "cosine":
                 query = F.normalize(flat, dim=-1)
                 scores = query @ self._memory_contexts.transpose(0, 1)
-                indices = torch.topk(scores, k=candidate_k, dim=-1).indices
-                if self.retrieval_exclude_self and candidate_k > k:
+                if use_index_exclusion:
+                    self._suppress_indexed_self_matches(scores, window_index, fill_value=-float("inf"))
+                    indices = torch.topk(scores, k=k, dim=-1).indices
+                else:
+                    indices = torch.topk(scores, k=candidate_k, dim=-1).indices
+                if self.retrieval_exclude_self and not use_index_exclusion and candidate_k > k:
                     gathered = torch.gather(scores, 1, indices)
                     drop_first = gathered[:, 0] > 1.0 - 1e-6
                     indices = torch.where(drop_first[:, None], indices[:, 1 : k + 1], indices[:, :k])
@@ -713,8 +724,12 @@ class RATDForecastModel(BaseProbForecastModel):
                     indices = indices[:, :k]
             else:
                 distances = torch.cdist(flat, self._memory_contexts)
-                indices = torch.topk(distances, k=candidate_k, largest=False, dim=-1).indices
-                if self.retrieval_exclude_self and candidate_k > k:
+                if use_index_exclusion:
+                    self._suppress_indexed_self_matches(distances, window_index, fill_value=float("inf"))
+                    indices = torch.topk(distances, k=k, largest=False, dim=-1).indices
+                else:
+                    indices = torch.topk(distances, k=candidate_k, largest=False, dim=-1).indices
+                if self.retrieval_exclude_self and not use_index_exclusion and candidate_k > k:
                     gathered = torch.gather(distances, 1, indices)
                     drop_first = gathered[:, 0] < 1e-8
                     indices = torch.where(drop_first[:, None], indices[:, 1 : k + 1], indices[:, :k])
@@ -725,6 +740,15 @@ class RATDForecastModel(BaseProbForecastModel):
                 pad = refs[:, -1:, :, :].expand(-1, self.retrieval_k - refs.shape[1], -1, -1)
                 refs = torch.cat((refs, pad), dim=1)
             return refs.permute(0, 3, 1, 2).reshape(past_target.shape[0], past_target.shape[-1], -1)
+
+    def _suppress_indexed_self_matches(self, matrix: Any, window_index: Any, fill_value: float) -> None:
+        """Mask exact same-window retrieval rows, matching RATD precomputed-index exclusion."""
+
+        index = window_index.to(matrix.device).long().reshape(-1)
+        valid = (index >= 0) & (index < matrix.shape[1])
+        if bool(valid.any().detach().cpu()):
+            rows = torch.arange(matrix.shape[0], device=matrix.device)[valid]
+            matrix[rows, index[valid]] = fill_value
 
     def _make_loader(self, data: RollingWindowDataset, shuffle: bool) -> Any:
         return make_torch_data_loader(data, self.batch_size, shuffle, self._scaler, include_time_features=False)
@@ -769,7 +793,11 @@ class RATDForecastModel(BaseProbForecastModel):
             count = 0
             for batch in iter_torch_batches(train_loader, self._device):
                 optimizer.zero_grad()
-                reference = self._reference_from_past(batch["past_target"])
+                reference = self._reference_from_past(
+                    batch["past_target"],
+                    window_index=batch.get("window_index"),
+                    exclude_by_index=True,
+                )
                 loss = self._network.loss(batch, reference, validate_all_steps=False)
                 loss.backward()
                 if self.gradient_clip_val is not None:

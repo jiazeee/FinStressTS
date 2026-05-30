@@ -9,11 +9,13 @@ from typing import Any, Dict, Optional
 
 from finprobts.config import load_yaml_config, save_yaml_config
 from finprobts.data import (
+    concatenate_financial_datasets,
     DatasetNormalizer,
     FinancialDataset,
+    generate_boundary_aware_rolling_windows,
     generate_rolling_windows,
     get_default_dataset_registry,
-    handle_missing_values,
+    handle_missing_values_split_safe,
     price_to_log_return,
     time_train_val_test_split,
 )
@@ -67,9 +69,6 @@ def _preprocess_dataset(dataset: FinancialDataset, config: Dict[str, Any]) -> Fi
     value_kind = preprocessing.get("value_kind", dataset.metadata.get("value_kind", "returns"))
     if preprocessing.get("price_to_log_return", False) or value_kind == "prices":
         dataset = price_to_log_return(dataset)
-
-    missing_method = preprocessing.get("missing_method", "ffill")
-    dataset = handle_missing_values(dataset, method=missing_method)
     return dataset
 
 
@@ -82,6 +81,9 @@ def _make_windows(config: Dict[str, Any], dataset: FinancialDataset):
         val_size=float(split_config.get("val_size", 0.2)),
         test_size=split_config.get("test_size"),
     )
+
+    missing_method = config.get("preprocessing", {}).get("missing_method", "ffill")
+    split = handle_missing_values_split_safe(split, method=missing_method)
 
     standardize = bool(config.get("preprocessing", {}).get("standardize", True))
     normalizer: Optional[DatasetNormalizer] = None
@@ -98,8 +100,26 @@ def _make_windows(config: Dict[str, Any], dataset: FinancialDataset):
     stride = int(task_config.get("stride", 1))
 
     train_windows = generate_rolling_windows(split.train, context_length, prediction_length, stride)
-    val_windows = generate_rolling_windows(split.val, context_length, prediction_length, stride)
-    test_windows = generate_rolling_windows(split.test, context_length, prediction_length, stride)
+    val_windows = generate_boundary_aware_rolling_windows(
+        split.train,
+        split.val,
+        context_length,
+        prediction_length,
+        stride,
+        metadata={"split_role": "validation"},
+    )
+    test_history = concatenate_financial_datasets(
+        [split.train, split.val],
+        metadata={"split_role": "test_history"},
+    )
+    test_windows = generate_boundary_aware_rolling_windows(
+        test_history,
+        split.test,
+        context_length,
+        prediction_length,
+        stride,
+        metadata={"split_role": "test"},
+    )
     return train_windows, val_windows, test_windows, normalizer
 
 

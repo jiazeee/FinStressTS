@@ -48,6 +48,7 @@ def test_make_window_arrays_masks_and_shapes():
     assert arrays["past_observed_values"].shape == (42, 6, 3)
     assert arrays["target_dimension_indicator"].shape == (42, 3)
     assert arrays["past_time_feat"].shape[-1] == 4
+    assert arrays["window_index"].tolist() == list(range(len(windows)))
     assert arrays["past_observed_values"][0, 4, 1] == 0.0
     assert arrays["past_target"][0, 4, 1] == 0.0
 
@@ -60,6 +61,23 @@ def test_torch_standard_scaler_round_trip():
     assert np.allclose(restored, data)
 
 
+def test_torch_standard_scaler_uses_finite_values_and_rejects_empty_dimensions():
+    data = np.array(
+        [
+            [[1.0, np.nan], [3.0, 5.0]],
+            [[np.nan, 7.0], [5.0, np.nan]],
+        ]
+    )
+
+    scaler = TorchStandardScaler.fit(data)
+
+    np.testing.assert_allclose(scaler.mean, [3.0, 6.0])
+    np.testing.assert_allclose(scaler.std, [np.sqrt(8.0 / 3.0), 1.0])
+
+    with pytest.raises(ValueError, match="no finite values"):
+        TorchStandardScaler.fit(np.array([[[1.0, np.nan], [2.0, np.nan]]]))
+
+
 def test_native_model_registry_names():
     names = get_default_model_registry().names()
 
@@ -70,6 +88,35 @@ def test_native_model_registry_names():
     assert "timegrad" in names
     assert "timemcl" in names
     assert "tsflow" in names
+
+
+def test_tsflow_residual_block_uses_native_s4_temporal_mixer():
+    torch = pytest.importorskip("torch")
+    from finprobts.models.tsflow.model import TSFlowResidualBlock, TSFlowS4Layer
+
+    block = TSFlowResidualBlock(
+        hidden_dim=8,
+        num_features=4,
+        target_dim=3,
+        nheads=1,
+        dropout=0.0,
+        bidirectional=True,
+    )
+
+    assert isinstance(block.s4block, TSFlowS4Layer)
+    assert not any(isinstance(module, torch.nn.TransformerEncoder) for module in block.modules())
+
+
+def test_ratd_suppresses_exact_training_window_self_match():
+    torch = pytest.importorskip("torch")
+    model = RATDForecastModel()
+    matrix = torch.tensor([[0.1, 0.9, 0.2], [0.8, 0.2, 0.7]], dtype=torch.float32)
+
+    model._suppress_indexed_self_matches(matrix, torch.tensor([1, 0]), fill_value=-float("inf"))
+
+    assert torch.isneginf(matrix[0, 1])
+    assert torch.isneginf(matrix[1, 0])
+    assert float(matrix[0, 0]) == pytest.approx(0.1)
 
 
 def test_deepvar_smoke_fit_predict_save_load(tmp_path):
@@ -380,6 +427,7 @@ def test_tsflow_multistep_gp_prior_shape():
     assert result.y_true.shape == (42, 3, 3)
     assert result.metadata["lags_seq"] == [1, 3]
     assert result.metadata["prior_kernel"] == "ou"
+    assert result.metadata["s4_backend"] == "native_diagonal_state_space"
 
 
 def test_cli_deepvar_smoke_run(tmp_path):

@@ -24,6 +24,9 @@ DEFAULT_DATASET_CONFIG = {
     "asset_id_column": "series_id",
     "target_column": "y",
     "feature_columns": None,
+    "time_index": "relative",
+    "freq": "D",
+    "validate_regular": True,
 }
 
 

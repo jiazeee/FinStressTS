@@ -175,8 +175,109 @@ class GaussianProcessPrior(nn.Module if nn is not None else object):
         return mean, std, sample
 
 
+class TSFlowDiagonalStateSpace(nn.Module if nn is not None else object):
+    """Compact diagonal state-space mixer used as a native S4-style layer.
+
+    The official TSFlow backbone uses an S4 layer from the upstream repository.
+    This implementation keeps the dependency surface minimal while preserving
+    the important structure: a learned stable state-space convolution over the
+    temporal axis, followed by a channel projection.
+    """
+
+    def __init__(self, d_model: int, state_dim: int = 128) -> None:
+        require_torch()
+        super().__init__()
+        self.d_model = int(d_model)
+        self.state_dim = int(state_dim)
+        self.A_log = nn.Parameter(
+            torch.log(torch.arange(1, self.state_dim + 1, dtype=torch.float32)).repeat(self.d_model, 1)
+        )
+        self.log_dt = nn.Parameter(torch.empty(self.d_model).uniform_(math.log(1e-3), math.log(1e-1)))
+        self.B = nn.Parameter(torch.randn(self.d_model, self.state_dim) * 0.02)
+        self.C = nn.Parameter(torch.randn(self.d_model, self.state_dim) * 0.02)
+        self.D = nn.Parameter(torch.ones(self.d_model))
+        self.output_linear = nn.Conv1d(self.d_model, self.d_model, kernel_size=1)
+
+    def _kernel(self, length: int, device: Any, dtype: Any) -> Any:
+        time = torch.arange(int(length), device=device, dtype=dtype)
+        a = -torch.exp(self.A_log).to(device=device, dtype=dtype)
+        dt = torch.exp(self.log_dt).to(device=device, dtype=dtype).unsqueeze(-1)
+        bc = (self.B * self.C).to(device=device, dtype=dtype) * dt
+        values = torch.exp((a * dt).unsqueeze(-1) * time)
+        return (bc.unsqueeze(-1) * values).sum(dim=1)
+
+    def forward(self, u: Any) -> Any:
+        length = u.shape[-1]
+        kernel = self._kernel(length, u.device, u.dtype)
+        fft_length = max(2, 2 * int(length))
+        u_fft = torch.fft.rfft(u, n=fft_length)
+        k_fft = torch.fft.rfft(kernel, n=fft_length)
+        y = torch.fft.irfft(u_fft * k_fft.unsqueeze(0), n=fft_length)[..., :length]
+        y = y + u * self.D.to(device=u.device, dtype=u.dtype).reshape(1, -1, 1)
+        return self.output_linear(y)
+
+
+class TSFlowS4Layer(nn.Module if nn is not None else object):
+    """Native S4-style layer matching the official TSFlow block interface."""
+
+    def __init__(
+        self,
+        d_model: int,
+        dropout: float = 0.0,
+        bidirectional: bool = True,
+        state_dim: int = 128,
+    ) -> None:
+        require_torch()
+        super().__init__()
+        self.bidirectional = bool(bidirectional)
+        self.norm = nn.LayerNorm(int(d_model))
+        self.ssm = TSFlowDiagonalStateSpace(int(d_model), state_dim=int(state_dim))
+        self.ssm_reverse = (
+            TSFlowDiagonalStateSpace(int(d_model), state_dim=int(state_dim)) if self.bidirectional else None
+        )
+        self.activation = nn.GELU()
+        self.dropout = nn.Dropout1d(float(dropout)) if float(dropout) > 0.0 else nn.Identity()
+
+    def forward(self, x: Any) -> tuple[Any, None]:
+        z = self.norm(x.transpose(-1, -2)).transpose(-1, -2)
+        y = self.ssm(z)
+        if self.ssm_reverse is not None:
+            y = y + torch.flip(self.ssm_reverse(torch.flip(z, dims=(-1,))), dims=(-1,))
+        y = self.dropout(self.activation(y))
+        return x + y, None
+
+
+class TSFlowAssetAttention(nn.Module if nn is not None else object):
+    """Cross-asset attention used where official TSFlow uses linear attention."""
+
+    def __init__(self, hidden_dim: int, nheads: int, dropout: float) -> None:
+        require_torch()
+        super().__init__()
+        self.norm = nn.LayerNorm(int(hidden_dim))
+        self.attention = nn.MultiheadAttention(
+            embed_dim=int(hidden_dim),
+            num_heads=int(nheads),
+            dropout=float(dropout),
+            batch_first=True,
+        )
+        self.dropout = nn.Dropout(float(dropout)) if float(dropout) > 0.0 else nn.Identity()
+        self.ff_norm = nn.LayerNorm(int(hidden_dim))
+        self.ff = nn.Sequential(
+            nn.Linear(int(hidden_dim), 4 * int(hidden_dim)),
+            nn.GELU(),
+            nn.Dropout(float(dropout)) if float(dropout) > 0.0 else nn.Identity(),
+            nn.Linear(4 * int(hidden_dim), int(hidden_dim)),
+        )
+
+    def forward(self, x: Any) -> Any:
+        z = self.norm(x)
+        attended, _ = self.attention(z, z, z, need_weights=False)
+        x = x + self.dropout(attended)
+        return x + self.dropout(self.ff(self.ff_norm(x)))
+
+
 class TSFlowResidualBlock(nn.Module if nn is not None else object):
-    """Residual temporal and cross-asset sequence block for the TSFlow backbone."""
+    """Official-style TSFlow block: S4 temporal mixing, optional asset attention, gated head."""
 
     def __init__(
         self,
@@ -189,30 +290,15 @@ class TSFlowResidualBlock(nn.Module if nn is not None else object):
     ) -> None:
         require_torch()
         super().__init__()
-        del bidirectional  # The native block uses non-causal full-window attention.
         self.hidden_dim = int(hidden_dim)
         self.target_dim = int(target_dim)
         self.time_linear = nn.Linear(self.hidden_dim, self.hidden_dim)
         self.feature_encoder = nn.Conv2d(int(num_features), self.hidden_dim, kernel_size=1)
-        self.temporal_layer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=self.hidden_dim,
-                nhead=int(nheads),
-                dim_feedforward=max(64, 4 * self.hidden_dim),
-                dropout=float(dropout),
-                activation="gelu",
-            ),
-            num_layers=1,
-        )
-        self.asset_layer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=self.hidden_dim,
-                nhead=int(nheads),
-                dim_feedforward=max(64, 4 * self.hidden_dim),
-                dropout=float(dropout),
-                activation="gelu",
-            ),
-            num_layers=1,
+        self.s4block = TSFlowS4Layer(self.hidden_dim, dropout=float(dropout), bidirectional=bool(bidirectional))
+        self.asset_layer = (
+            TSFlowAssetAttention(self.hidden_dim, nheads=int(nheads), dropout=float(dropout))
+            if self.target_dim > 1
+            else None
         )
         self.out_linear1 = nn.Conv2d(self.hidden_dim, self.hidden_dim, kernel_size=1)
         self.out_linear2 = nn.Conv2d(self.hidden_dim, self.hidden_dim, kernel_size=1)
@@ -221,17 +307,17 @@ class TSFlowResidualBlock(nn.Module if nn is not None else object):
         batch_size, channels, num_assets, length = y.shape
         if length == 1:
             return y
-        z = y.permute(3, 0, 2, 1).reshape(length, batch_size * num_assets, channels)
-        z = self.temporal_layer(z)
-        return z.reshape(length, batch_size, num_assets, channels).permute(1, 3, 2, 0)
+        z = y.permute(0, 2, 1, 3).reshape(batch_size * num_assets, channels, length)
+        z, _ = self.s4block(z)
+        return z.reshape(batch_size, num_assets, channels, length).permute(0, 2, 1, 3)
 
     def _assets(self, y: Any) -> Any:
         batch_size, channels, num_assets, length = y.shape
-        if num_assets == 1:
+        if num_assets == 1 or self.asset_layer is None:
             return y
-        z = y.permute(2, 0, 3, 1).reshape(num_assets, batch_size * length, channels)
+        z = y.permute(0, 3, 2, 1).reshape(batch_size * length, num_assets, channels)
         z = self.asset_layer(z)
-        return z.reshape(num_assets, batch_size, length, channels).permute(1, 3, 0, 2)
+        return z.reshape(batch_size, length, num_assets, channels).permute(0, 3, 2, 1)
 
     def forward(self, x: Any, t: Any, features: Optional[Any]) -> tuple[Any, Any]:
         t = self.time_linear(t).reshape(t.shape[0], self.hidden_dim, 1, 1)
@@ -935,6 +1021,7 @@ class TSFlowForecastModel(BaseProbForecastModel):
                 "hidden_dim": self.hidden_dim,
                 "num_residual_blocks": self.num_residual_blocks,
                 "residual_block": self.residual_block,
+                "s4_backend": "native_diagonal_state_space",
                 "model_internal_scaling": self.scaling,
                 "training_history": list(self.training_history),
             },

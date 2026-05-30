@@ -39,13 +39,28 @@ class NaiveForecastModel(BaseProbForecastModel):
         if num_samples <= 0:
             raise ValueError("num_samples must be positive.")
 
-        x = test_data.x_context
+        x = np.asarray(test_data.x_context, dtype=float)
         num_windows, _, num_assets = x.shape
         prediction_length = test_data.prediction_length
 
-        mu = x.mean(axis=1)
-        std = x.std(axis=1)
-        std = np.where(std < self.min_std, self.min_std, std)
+        observed = np.isfinite(x)
+        count = observed.sum(axis=1)
+        observed_sum = np.where(observed, x, 0.0).sum(axis=1)
+        mu = np.divide(
+            observed_sum,
+            count,
+            out=np.zeros_like(observed_sum, dtype=float),
+            where=count > 0,
+        )
+        centered = np.where(observed, x - mu[:, np.newaxis, :], 0.0)
+        var = np.divide(
+            (centered * centered).sum(axis=1),
+            count,
+            out=np.zeros_like(mu, dtype=float),
+            where=count > 0,
+        )
+        std = np.sqrt(var)
+        std = np.where(np.isfinite(std) & (std >= self.min_std), std, self.min_std)
 
         noise = self._rng.standard_normal(
             size=(num_windows, num_samples, prediction_length, num_assets)
@@ -64,6 +79,7 @@ class NaiveForecastModel(BaseProbForecastModel):
                 "model_name": "naive",
                 "seed": self.seed,
                 "min_std": self.min_std,
+                "uses_observed_context_only": True,
             },
         )
 

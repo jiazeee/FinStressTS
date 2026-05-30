@@ -43,8 +43,9 @@ CASE_PRESETS: Dict[str, Dict[str, Any]] = {
         "fixed": {
             "T": 20000,
             "n_factors": 3,
+            "burn_in": 200,
+            "eps": 1e-12,
         },
-        "post_burn_in": 200,
         "levels": [
             {"level": 1, "s": 0.60, "lam": 0.40, "c_idio": 2e-4, "gamma": 1.00, "n_firms": 50},
             {"level": 2, "s": 0.90, "lam": 0.40, "c_idio": 2e-4, "gamma": 1.00, "n_firms": 50},

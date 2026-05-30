@@ -17,10 +17,11 @@ import numpy as np
 from finprobts.data.schema import RollingWindowDataset
 from finprobts.models.base import BaseProbForecastModel, ForecastResult
 from finprobts.models.torch_utils import (
-    calendar_time_features,
+    relative_time_origin_and_scale,
     require_torch,
     resolve_torch_device,
     set_torch_seed,
+    time_features_from_dates,
 )
 
 
@@ -85,8 +86,25 @@ def _make_deepar_arrays(
     prediction_length = windows.prediction_length
 
     if use_time_features:
-        past_time = calendar_time_features(windows.context_dates)
-        future_time = calendar_time_features(windows.target_dates)
+        origin = None
+        scale = None
+        if str(windows.metadata.get("time_index_kind", "datetime")).lower() == "relative":
+            combined_dates = np.concatenate(
+                [windows.context_dates.reshape(-1), windows.target_dates.reshape(-1)]
+            )
+            origin, scale = relative_time_origin_and_scale(combined_dates)
+        past_time = time_features_from_dates(
+            windows.context_dates,
+            windows.metadata,
+            origin=origin,
+            scale=scale,
+        )
+        future_time = time_features_from_dates(
+            windows.target_dates,
+            windows.metadata,
+            origin=origin,
+            scale=scale,
+        )
     else:
         past_time = np.zeros((num_windows, context_length, 0), dtype=np.float32)
         future_time = np.zeros((num_windows, prediction_length, 0), dtype=np.float32)

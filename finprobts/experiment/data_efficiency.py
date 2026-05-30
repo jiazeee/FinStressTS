@@ -16,10 +16,13 @@ import numpy as np
 
 from finprobts.config import load_yaml_config, save_yaml_config
 from finprobts.data import (
+    concatenate_financial_datasets,
     DatasetNormalizer,
     FinancialDataset,
+    generate_boundary_aware_rolling_windows,
     generate_rolling_windows,
     get_default_dataset_registry,
+    handle_missing_values_split_safe,
     time_train_val_test_split,
 )
 from finprobts.evaluation import evaluate_forecasts
@@ -256,6 +259,28 @@ def _maybe_windows(
     return generate_rolling_windows(dataset, context_length, prediction_length, stride, metadata=metadata)
 
 
+def _maybe_boundary_windows(
+    history: FinancialDataset,
+    target: FinancialDataset,
+    context_length: int,
+    prediction_length: int,
+    stride: int,
+    metadata: Dict[str, Any],
+):
+    if target.num_timesteps < prediction_length:
+        return None
+    if history.num_timesteps + target.num_timesteps < context_length + prediction_length:
+        return None
+    return generate_boundary_aware_rolling_windows(
+        history,
+        target,
+        context_length,
+        prediction_length,
+        stride,
+        metadata=metadata,
+    )
+
+
 def _make_model(model_entry: Dict[str, Any], run_seed: Any):
     params = dict(model_entry.get("params", {}))
     params.setdefault("seed", run_seed)
@@ -339,8 +364,26 @@ def _run_one_setting(
         "model_id": model_id,
     }
     train_windows = _maybe_windows(train_data, context_length, prediction_length, stride, window_metadata)
-    val_windows = _maybe_windows(val_data, context_length, prediction_length, stride, window_metadata)
-    test_windows = _maybe_windows(test_data, context_length, prediction_length, stride, window_metadata)
+    val_windows = _maybe_boundary_windows(
+        train_data,
+        val_data,
+        context_length,
+        prediction_length,
+        stride,
+        {**window_metadata, "split_role": "validation"},
+    )
+    test_history = concatenate_financial_datasets(
+        [train_data, val_data],
+        metadata={**window_metadata, "split_role": "test_history"},
+    )
+    test_windows = _maybe_boundary_windows(
+        test_history,
+        test_data,
+        context_length,
+        prediction_length,
+        stride,
+        {**window_metadata, "split_role": "test"},
+    )
     if train_windows is None:
         raise ValueError(
             "Training slice is too short for the requested task: "
@@ -524,6 +567,10 @@ def run_data_efficiency(
                 train_size=float(split_config.get("train_size", 0.6)),
                 val_size=float(split_config.get("val_size", 0.2)),
                 test_size=split_config.get("test_size"),
+            )
+            split = handle_missing_values_split_safe(
+                split,
+                method=config.get("preprocessing", {}).get("missing_method", "ffill"),
             )
         except Exception as exc:
             for model_entry in model_entries:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pandas as pd
+
 import finprobts
 from finprobts.data import get_default_dataset_registry
 from finprobts.simulators import (
@@ -54,6 +56,27 @@ def test_generate_synthetic_case_writes_artifacts(tmp_path):
     with open(out["meta_path"], "r", encoding="utf-8") as handle:
         meta = json.load(handle)
     assert meta["case"] == "case1_garch"
+
+
+def test_generate_har_case_retains_requested_T_after_burn_in(tmp_path):
+    out = generate_synthetic_case(
+        case="case2_har",
+        level=1,
+        out_dir=str(tmp_path),
+        base_seed=10,
+        T=30,
+        n_firms=3,
+        formats=("csv",),
+    )
+
+    df = pd.read_csv(out["csv_path"])
+    assert df["time"].nunique() == 30
+    assert len(df) == 90
+    assert out["summary"]["T_effective"] == 30
+    with open(out["meta_path"], "r", encoding="utf-8") as handle:
+        meta = json.load(handle)
+    assert meta["summary"]["T_effective"] == 30
+    assert meta["config"]["burn_in"] == 200
 
 
 def test_generate_synthetic_suite_writes_manifest(tmp_path):

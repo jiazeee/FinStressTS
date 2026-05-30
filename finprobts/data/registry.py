@@ -114,7 +114,12 @@ def _synthetic_loader(simulator_name: str) -> DatasetLoader:
             values=values,
             dates=np.arange(values.shape[0], dtype="int64"),
             asset_ids=[f"asset_{idx}" for idx in range(values.shape[1])],
-            metadata={"dataset_name": f"synthetic_{simulator_name}", "simulator_params": result.get("params", {})},
+            metadata={
+                "dataset_name": f"synthetic_{simulator_name}",
+                "simulator_params": result.get("params", {}),
+                "time_index_kind": "relative",
+                "freq": "D",
+            },
         )
 
     return load_synthetic

@@ -3,15 +3,107 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
 
-def _as_datetime_array(dates: Any) -> np.ndarray:
-    parsed = pd.to_datetime(dates)
+def _relative_numeric_dates(raw: np.ndarray, metadata: Dict[str, Any]) -> np.ndarray:
+    freq = str(metadata.get("freq") or "D")
+    origin = str(metadata.get("time_origin", "1970-01-01"))
+    values = raw.astype(float)
+    steps = values - float(values[0]) if len(values) else values
+    offset = pd.tseries.frequencies.to_offset(freq)
+
+    try:
+        nanos = offset.nanos
+    except ValueError as exc:
+        rounded = np.round(steps).astype(int)
+        if not np.allclose(steps, rounded):
+            raise ValueError(
+                f"Numeric relative dates with non-fixed freq='{freq}' require integer steps."
+            ) from exc
+        parsed = pd.DatetimeIndex([pd.Timestamp(origin) + int(step) * offset for step in rounded])
+    else:
+        parsed = pd.DatetimeIndex(pd.Timestamp(origin) + pd.to_timedelta(steps * float(nanos), unit="ns"))
+
     return np.asarray(parsed, dtype="datetime64[ns]")
+
+
+def _as_datetime_array(dates: Any, metadata: Optional[Dict[str, Any]] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Coerce timestamps while preserving relative-time semantics.
+
+    Pandas treats integer arrays passed to ``to_datetime`` as nanoseconds after
+    epoch. That is almost never what synthetic or indexed benchmark time axes
+    mean, so numeric time is converted to a regular relative index instead and
+    marked in metadata.
+    """
+
+    meta = dict(metadata or {})
+    raw = np.asarray(dates)
+    updates: Dict[str, Any] = {}
+
+    if np.issubdtype(raw.dtype, np.datetime64):
+        parsed = pd.to_datetime(raw)
+        updates["time_index_kind"] = meta.get("time_index_kind", "datetime")
+        if "freq" in meta:
+            updates["freq"] = meta["freq"]
+        return np.asarray(parsed, dtype="datetime64[ns]"), updates
+
+    if np.issubdtype(raw.dtype, np.number):
+        freq = str(meta.get("freq") or "D")
+        origin = str(meta.get("time_origin", "1970-01-01"))
+        updates.update(
+            {
+                "time_index_kind": meta.get("time_index_kind", "relative"),
+                "freq": freq,
+                "time_origin": origin,
+            }
+        )
+        return _relative_numeric_dates(raw, updates), updates
+
+    parsed = pd.to_datetime(dates, errors="raise")
+    updates["time_index_kind"] = meta.get("time_index_kind", "datetime")
+    if "freq" in meta:
+        updates["freq"] = meta["freq"]
+    return np.asarray(parsed, dtype="datetime64[ns]"), updates
+
+
+def concatenate_financial_datasets(
+    datasets: Iterable["FinancialDataset"],
+    metadata: Optional[Dict[str, Any]] = None,
+) -> "FinancialDataset":
+    """Concatenate compatible datasets along the time dimension."""
+
+    parts = [dataset for dataset in datasets if dataset.num_timesteps > 0]
+    if not parts:
+        raise ValueError("At least one non-empty dataset is required.")
+
+    asset_ids = list(parts[0].asset_ids)
+    feature_keys = set(parts[0].features)
+    for dataset in parts[1:]:
+        if list(dataset.asset_ids) != asset_ids:
+            raise ValueError("Cannot concatenate datasets with different asset_ids.")
+        if set(dataset.features) != feature_keys:
+            raise ValueError("Cannot concatenate datasets with different feature sets.")
+
+    values = np.concatenate([dataset.values for dataset in parts], axis=0)
+    dates = np.concatenate([dataset.dates for dataset in parts], axis=0)
+    features = {
+        name: np.concatenate([dataset.features[name] for dataset in parts], axis=0)
+        for name in feature_keys
+    }
+    combined_metadata = dict(parts[0].metadata)
+    combined_metadata.update(metadata or {})
+    combined_metadata["concatenated_slices"] = [dict(dataset.metadata.get("slice", {})) for dataset in parts]
+    return FinancialDataset(
+        values=values,
+        dates=dates,
+        asset_ids=asset_ids,
+        features=features,
+        metadata=combined_metadata,
+    )
 
 
 @dataclass
@@ -38,7 +130,10 @@ class FinancialDataset:
         if self.values.ndim != 2:
             raise ValueError("FinancialDataset.values must have shape [time, assets].")
 
-        self.dates = _as_datetime_array(self.dates)
+        self.metadata = dict(self.metadata)
+        self.dates, time_metadata = _as_datetime_array(self.dates, self.metadata)
+        for key, value in time_metadata.items():
+            self.metadata.setdefault(key, value)
         if len(self.dates) != self.values.shape[0]:
             raise ValueError("dates length must match the time dimension of values.")
 
