@@ -1,6 +1,6 @@
 # FinStressTS
 
-FinStressTS is a paper-code benchmark for probabilistic financial stress time-series forecasting. It provides synthetic financial panels with controlled stylized facts, a standardized data-processing pipeline, native implementations of probabilistic forecasting models, and a unified evaluator.
+FinStressTS is a synthetic benchmark for probabilistic financial stress time-series forecasting. It provides synthetic financial panels with controlled stylized facts, a standardized data-processing pipeline, native implementations of probabilistic forecasting models, and a unified evaluator.
 
 The Python package and CLI are named `finprobts` for compatibility with existing experiment configs.
 
@@ -13,7 +13,7 @@ The Python package and CLI are named `finprobts` for compatibility with existing
 - Native benchmark implementations of `naive`, `deepar`, `deepvar`, `tempflow`, `timegrad`, `timemcl`, `ratd`, and `tsflow`.
 - Evaluation metrics including point errors, quantile loss, empirical coverage, sample CRPS approximations, and finance-oriented diagnostics.
 
-The deep models are native FinStressTS implementations aligned with the cited papers and public architecture references. They are intended for a consistent benchmark interface, not as byte-for-byte vendored copies of upstream repositories. For exact reproduction of an original method, please consult the original paper and official implementation listed in each model's `finprobts/models/<model>/REFERENCE.md`.
+The deep models are native FinStressTS implementations aligned with the cited papers and public architecture references. They are intended for a consistent benchmark interface. For exact reproduction of an original method, please consult the original paper and official implementation listed in each model's `finprobts/models/<model>/REFERENCE.md`.
 
 ## Installation
 
@@ -115,16 +115,6 @@ task:
   stride: 1
 ```
 
-The runner applies the following pipeline in `finprobts/experiment/runner.py`:
-
-1. load CSV/Parquet through the dataset registry;
-2. convert prices to log returns when requested;
-3. split chronologically into train/validation/test;
-4. handle missing values split-safely, using causal forward fill by default;
-5. fit standardization on train only, then transform validation/test;
-6. build rolling windows, with boundary-aware validation/test windows so history comes only from previous splits;
-7. pass `RollingWindowDataset` objects to the model.
-
 To only load and preprocess a dataset into an NPZ file:
 
 ```powershell
@@ -161,8 +151,6 @@ Recommended steps:
 2. Add `finprobts/models/<your_model>/__init__.py`.
 3. Register the model in `finprobts/models/registry.py`.
 4. Add a default config under `configs/model/<your_model>.yaml`.
-5. Add a smoke test in `tests/test_torch_models.py` or `tests/test_models_evaluation.py`.
-6. Add `finprobts/models/<your_model>/REFERENCE.md` with the paper, official repository, license notes, and known deviations.
 
 Minimal config shape:
 
@@ -238,7 +226,7 @@ outputs/synthetic_suite/synthetic_suite_summary.json
 
 The repository prioritizes one reproducible benchmark interface over vendoring multiple external training stacks. Implementations follow the same high-level architectures and training objectives where practical, but may use native PyTorch modules, local data adapters, or dependency-light substitutes. Examples include native DeepAR/DeepVAR-style recurrent probabilistic forecasters, TimeGrad/TempFlow-style generative models, RATD-style retrieval-augmented diffusion, TimeMCL-style WTA hypotheses, and TSFlow with a native S4-style state-space backend.
 
-For publication tables, report these as FinStressTS-native implementations unless you run the official upstream code directly. The exact references and deviations are documented in:
+The exact references and deviations are documented in:
 
 ```text
 finprobts/models/deepar/REFERENCE.md
@@ -262,8 +250,4 @@ For the torch model smoke tests:
 pytest tests/test_torch_models.py -q
 ```
 
-## Citation and License
 
-Fill in final paper metadata in `CITATION.cff` before public release.
-
-MIT. See `LICENSE`.
