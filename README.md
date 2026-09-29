@@ -252,3 +252,16 @@ For the torch model smoke tests:
 pytest tests/test_torch_models.py -q
 ```
 
+## Citation
+
+If you find this repository useful, please cite our paper.
+
+```
+@inproceedings{sun2026finstressts,
+  title={FinStressTS: A Parametric Synthetic Benchmark for Time-Series Forecasting in Finance},
+  author={Sun, Jiaze and Koa, Kelvin J.L. and Ni, Ruiyang and Liu, Yize and Chen, Haonan and Huang, Ke-Wei},
+  booktitle={Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2},
+  pages={9836-9847},
+  year={2026}
+}
+```
